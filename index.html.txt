@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Rebellion</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column; /* Arrange header, main, footer vertically */
+            justify-content: space-between; /* Push header to top, footer to bottom */
+            align-items: center;
+            min-height: 100vh; /* Use min-height for full viewport */
+            background: #000;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        header {
+            width: 100%;
+            background-color: #333;
+            padding: 15px 0;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
+        header h1 {
+            margin: 0;
+            color: #00CED1;
+            font-size: 2.5em;
+            text-shadow: 2px 2px #FF00FF; /* Match game title style */
+        }
+        main {
+            flex-grow: 1; /* Allow main content to take available space */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding: 20px 0; /* Add some padding around the game */
+            position: relative; /* For positioning touch controls relative to main */
+        }
+        #gameCanvas {
+            border: 2px solid #000;
+            image-rendering: pixelated;
+            max-width: 100%; /* Ensure canvas is responsive */
+            height: auto; /* Maintain aspect ratio */
+            display: block; /* Remove extra space below canvas */
+        }
+        footer {
+            width: 100%;
+            background-color: #333;
+            padding: 15px 0;
+            text-align: center;
+            font-size: 0.9em;
+            color: #aaa;
+            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Modal Styling (simplified for game over/win) */
+        .modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9); /* Slightly darker for modal */
+            padding: 25px; /* Increased padding */
+            border-radius: 12px; /* More rounded corners */
+            text-align: center;
+            z-index: 100;
+            border: 3px solid #00CED1; /* Thicker border */
+            box-shadow: 0 0 20px rgba(0, 206, 209, 0.5); /* Glowing effect */
+        }
+        .modal h2 {
+            color: #00CED1;
+            font-size: 2em;
+            margin-bottom: 15px;
+        }
+        .modal p {
+            margin-bottom: 10px;
+        }
+        .modal button {
+            padding: 12px 25px; /* Larger buttons */
+            margin-top: 20px;
+            background-color: #00CED1;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .modal button:hover {
+            background-color: #00BFFF;
+            transform: translateY(-2px);
+        }
+
+        /* Touch Controls Styling - Increased size and slightly adjusted opacity */
+        .touch-control {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.25); /* Slightly less transparent */
+            border-radius: 12px; /* More rounded */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em; /* Larger font for symbols/text */
+            font-weight: bold;
+            color: #fff; /* White text for controls */
+            user-select: none; /* Prevent text selection on touch */
+            -webkit-user-select: none; /* For WebKit browsers */
+            touch-action: manipulation; /* Prevent default browser gestures like zoom */
+            z-index: 50; /* Ensure controls are above canvas but below modals */
+            padding: 10px; /* Added padding for larger touch target */
+        }
+
+        /* Movement Controls - Increased dimensions */
+        #left-btn {
+            left: 2%; /* Closer to edge */
+            bottom: 2%; /* Closer to edge */
+            width: 20%; /* Larger */
+            height: 25%; /* Larger */
+        }
+        #right-btn {
+            right: 2%; /* Closer to edge */
+            bottom: 2%; /* Closer to edge */
+            width: 20%; /* Larger */
+            height: 25%; /* Larger */
+        }
+        #jump-btn {
+            left: 25%; /* Adjusted position */
+            transform: translateX(-50%);
+            bottom: 2%;
+            width: 18%; /* Larger */
+            height: 25%; /* Larger */
+        }
+
+        /* Aiming Controls - Increased dimensions and closer to edge */
+        #aim-up-btn {
+            left: 2%;
+            top: 2%;
+            width: 15%;
+            height: 18%;
+            font-size: 1.5em; /* Larger font */
+        }
+        #aim-down-btn {
+            left: 2%;
+            top: 22%; /* Position below aim-up, adjusted spacing */
+            width: 15%;
+            height: 18%;
+            font-size: 1.5em; /* Larger font */
+        }
+
+        /* Fire Button - Increased dimensions and closer to edge */
+        #fire-btn {
+            right: 2%;
+            top: 2%;
+            width: 20%;
+            height: 35%; /* Larger */
+            background-color: rgba(255, 69, 0, 0.4); /* Orange-red for fire, slightly less transparent */
+        }
+
+        /* Hide touch controls on larger screens (desktop) */
+        @media (min-width: 768px) {
+            .touch-control {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GPU REBELLION</h1>
+    </header>
+
+    <main>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+        <!-- Touch Controls -->
+        <div id="left-btn" class="touch-control">◀</div>
+        <div id="right-btn" class="touch-control">▶</div>
+        <div id="jump-btn" class="touch-control">JUMP</div>
+        <div id="aim-up-btn" class="touch-control">▲</div>
+        <div id="aim-down-btn" class="touch-control">▼</div>
+        <div id="fire-btn" class="touch-control">FIRE</div>
+
+    </main>
+
+    <!-- Generic message modal for game over/win -->
+    <div id="messageModal" class="modal" style="display: none;">
+        <h2 id="messageModalTitle"></h2>
+        <p id="messageModalText"></p>
+        <button id="messageModalRestartBtn">Restart Game</button>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 GPU Rebellion. All rights reserved.</p>
+        <p>Developed for Canvas environment.</p>
+    </footer>
+
+    <script type="module">
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let gameState = 'title';
+        let score = 0;
+        let level = 1;
+        let taolieHP = 200;
+        let enemyExplosions = [];
+        let animationFrame = 0;
+        let powerUpActive = false;
+        let powerUpTimer = 0;
+        let projectileDamage = 10;
+        let mushroomPowerUpActive = false;
+        let mushroomPowerUpTimer = 0;
+        let shieldPowerUpActive = false;
+        let shieldPowerUpTimer = 0;
+        let taolieScale = 1;
+        let lastPowerUpSpawn = 0;
+        let defeatedEnemies = 0; // Counter for defeated enemies per level
+        let enemiesToDefeatForLevel = 0; // How many enemies need to be defeated for the level
+        let levelTransitionTimer = 0; // Timer for level transition animation
+
+        // Global variables for enemy projectile damage scaling
+        const enemyProjectileBaseDamage = 5; // Starting damage for enemy projectiles
+        const enemyDamageIncreasePerLevel = 0.5; // Damage increases by 0.5 per level
+
+        // Game parameters
+        const MAX_ACTIVE_ENEMIES = 3; // Maximum number of enemies on screen at once
+
+        const taolie = {
+            x: 50,
+            y: 300,
+            width: 32,
+            height: 48,
+            speed: 5,
+            dy: 0,
+            gravity: 0.5,
+            jumpPower: -12,
+            isJumping: false,
+            color: '#800080',
+            angle: 0, // New: T-Man's projectile angle (0 = right, -PI/2 = up, PI/2 = down)
+            angleStep: Math.PI / 30, // How much angle changes per key press (6 degrees)
+            maxAngle: -Math.PI / 2, // Max angle looking up
+            minAngle: Math.PI / 4 // Max angle looking down
+        };
+
+        const projectiles = [];
+        const enemyProjectiles = [];
+        const particles = [];
+        const projectileSpeed = 7;
+        const projectileSize = 12;
+        let currentWeapon = 'tao';
+        let lastShot = 0;
+
+        let platforms = [];
+        let activeEnemies = [];
+        let enemyQueue = [];
+        const powerUps = [];
+
+        // Main Menu variables (Highscore removed)
+        const mainMenuOptions = ["Start Game", "Game Info"];
+        let selectedMenuOption = 0;
+
+        const keys = {};
+
+        // Event listener for Keyboard input (still active for desktop)
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (gameState === 'title' && e.key === 'Enter') {
+                gameState = 'main_menu';
+            } else if (gameState === 'main_menu') {
+                if (e.key === 'ArrowUp') {
+                    selectedMenuOption = (selectedMenuOption - 1 + mainMenuOptions.length) % mainMenuOptions.length;
+                } else if (e.key === 'ArrowDown') {
+                    selectedMenuOption = (selectedMenuOption + 1) % mainMenuOptions.length;
+                } else if (e.key === 'Enter') {
+                    if (mainMenuOptions[selectedMenuOption] === "Start Game") {
+                        resetGame();
+                    } else if (mainMenuOptions[selectedMenuOption] === "Game Info") {
+                        gameState = 'game_info';
+                    }
+                }
+            } else if (gameState === 'game_info') {
+                if (e.key === 'Enter') {
+                    goToMainMenu(); // Return to main menu
+                }
+            } else if (gameState === 'playing') {
+                // T-Man's angle adjustment
+                if (e.key === 'ArrowUp') {
+                    taolie.angle = Math.max(taolie.maxAngle, taolie.angle - taolie.angleStep);
+                } else if (e.key === 'ArrowDown') {
+                    taolie.angle = Math.min(taolie.minAngle, taolie.angle + taolie.angleStep);
+                }
+                if (e.key === 'Control') {
+                    currentWeapon = 'burst';
+                }
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+            if (e.key === 'Control') {
+                currentWeapon = 'tao';
+            }
+        });
+
+        // --- Touch Control Event Listeners ---
+        const setupTouchControls = () => {
+            const leftBtn = document.getElementById('left-btn');
+            const rightBtn = document.getElementById('right-btn');
+            const jumpBtn = document.getElementById('jump-btn');
+            const aimUpBtn = document.getElementById('aim-up-btn');
+            const aimDownBtn = document.getElementById('aim-down-btn');
+            const fireBtn = document.getElementById('fire-btn');
+
+            // Prevent default touch actions (like scrolling/zooming) on all touch controls
+            const preventDefaultTouch = (e) => {
+                if (e.cancelable) e.preventDefault();
+            };
+
+            [leftBtn, rightBtn, jumpBtn, aimUpBtn, aimDownBtn, fireBtn].forEach(btn => {
+                if (btn) {
+                    btn.addEventListener('touchstart', preventDefaultTouch, { passive: false });
+                    btn.addEventListener('touchmove', preventDefaultTouch, { passive: false });
+                    btn.addEventListener('touchend', preventDefaultTouch, { passive: false });
+                    btn.addEventListener('touchcancel', preventDefaultTouch, { passive: false });
+                }
+            });
+
+            // Handle touch events for each virtual button
+            if (leftBtn) {
+                leftBtn.addEventListener('touchstart', () => { keys['ArrowLeft'] = true; });
+                leftBtn.addEventListener('touchend', () => { keys['ArrowLeft'] = false; });
+                leftBtn.addEventListener('touchcancel', () => { keys['ArrowLeft'] = false; });
+            }
+
+            if (rightBtn) {
+                rightBtn.addEventListener('touchstart', () => { keys['ArrowRight'] = true; });
+                rightBtn.addEventListener('touchend', () => { keys['ArrowRight'] = false; });
+                rightBtn.addEventListener('touchcancel', () => { keys['ArrowRight'] = false; });
+            }
+
+            if (jumpBtn) {
+                jumpBtn.addEventListener('touchstart', () => { if (!taolie.isJumping) keys[' '] = true; });
+                jumpBtn.addEventListener('touchend', () => { keys[' '] = false; });
+                jumpBtn.addEventListener('touchcancel', () => { keys[' '] = false; });
+            }
+
+            if (aimUpBtn) {
+                aimUpBtn.addEventListener('touchstart', () => { keys['ArrowUp'] = true; });
+                aimUpBtn.addEventListener('touchend', () => { keys['ArrowUp'] = false; });
+                aimUpBtn.addEventListener('touchcancel', () => { keys['ArrowUp'] = false; });
+            }
+
+            if (aimDownBtn) {
+                aimDownBtn.addEventListener('touchstart', () => { keys['ArrowDown'] = true; });
+                aimDownBtn.addEventListener('touchend', () => { keys['ArrowDown'] = false; });
+                aimDownBtn.addEventListener('touchcancel', () => { keys['ArrowDown'] = false; });
+            }
+
+            if (fireBtn) {
+                fireBtn.addEventListener('touchstart', () => { currentWeapon = 'burst'; });
+                fireBtn.addEventListener('touchend', () => { currentWeapon = 'tao'; });
+                fireBtn.addEventListener('touchcancel', () => { currentWeapon = 'tao'; });
+            }
+
+            // Canvas Click/Tap to Start (only on title screen)
+            canvas.addEventListener('click', handleCanvasStartClick);
+            canvas.addEventListener('touchstart', handleCanvasStartClick, { passive: false });
+
+            function handleCanvasStartClick(e) {
+                if (gameState === 'title') {
+                    e.preventDefault(); // Prevent scrolling on touch
+                    gameState = 'main_menu';
+                }
+            }
+        };
+        // --- End Touch Control Event Listeners ---
+
+        // Event listener for the generic message modal's restart button
+        document.getElementById('messageModalRestartBtn').addEventListener('click', () => {
+            document.getElementById('messageModal').style.display = 'none';
+            goToMainMenu();
+        });
+
+        /**
+         * Navigates the game to the main menu.
+         */
+        function goToMainMenu() {
+            gameState = 'main_menu';
+            selectedMenuOption = 0; // Reset selected option to "Start Game"
+            document.getElementById('messageModal').style.display = 'none'; // Hide modal if open
+        }
+
+        /**
+         * Draws the main character, T-Man, with animations and power-up effects.
+         * @param {number} x - X coordinate of T-Man.
+         * @param {number} y - Y coordinate of T-Man.
+         */
+        function drawTaolie(x, y) {
+            animationFrame = (animationFrame + 1) % 60;
+            const isMoving = keys['ArrowLeft'] || keys['ArrowRight'];
+            const legFrame = animationFrame % 8;
+            const legOffset = isMoving ? [0, 2, 4, 3, 0, -2, -4, -3][legFrame] : 0;
+            const armFrame = animationFrame % 6;
+            const armOffset = (projectiles.length > 0 && animationFrame % 6 === 0) ? [0, 1, 2, 1, 0, -1][armFrame] : 0;
+
+            const scaledWidth = taolie.width * taolieScale;
+            const scaledHeight = taolie.height * taolieScale;
+            const adjustedX = x - (scaledWidth - taolie.width) / 2;
+            const adjustedY = y - (scaledHeight - taolie.height);
+
+            ctx.fillStyle = taolie.color;
+            ctx.fillRect(adjustedX + 8 * taolieScale, adjustedY + 16 * taolieScale, 16 * taolieScale, 16 * taolieScale); // Torso
+            ctx.fillStyle = taolie.color;
+            ctx.fillRect(adjustedX + 4 * taolieScale, adjustedY, 24 * taolieScale, 16 * taolieScale); // Helm
+            ctx.fillStyle = '#00CED1';
+            ctx.fillRect(adjustedX + 8 * taolieScale, adjustedY + 4 * taolieScale, 16 * taolieScale, 4 * taolieScale); // Visor horizontal
+            ctx.fillRect(adjustedX + 12 * taolieScale, adjustedY + 4 * taolieScale, 4 * taolieScale, 12 * taolieScale); // Visor vertical
+            ctx.fillStyle = taolie.color;
+            ctx.fillRect(adjustedX + 4 * taolieScale, adjustedY + 8 * taolieScale, 8 * taolieScale, 8 * taolieScale); // Left Shoulder pad
+            ctx.fillRect(adjustedX + 20 * taolieScale, adjustedY + 8 * taolieScale, 8 * taolieScale, 8 * taolieScale); // Right Shoulder pad
+            ctx.fillRect(adjustedX + 8 * taolieScale, adjustedY + 32 * taolieScale, 8 * taolieScale, (8 + legOffset) * taolieScale); // Left Leg
+            ctx.fillRect(adjustedX + 16 * taolieScale, adjustedY + 32 * taolieScale, 8 * taolieScale, (8 - legOffset) * taolieScale); // Right Leg
+            ctx.fillStyle = '#4682B4';
+            ctx.fillRect(adjustedX + 8 * taolieScale, adjustedY + (40 + legOffset) * taolieScale, 8 * taolieScale, 8 * taolieScale); // Left Boot
+            ctx.fillRect(adjustedX + 16 * taolieScale, adjustedY + (40 - legOffset) * taolieScale, 8 * taolieScale, 8 * taolieScale); // Right Boot
+
+            // T-Man's Arm Cannon (rotated)
+            const cannonLength = 12 * taolieScale;
+            const cannonWidth = 8 * taolieScale;
+            // Adjusted origin for drawing, consider the scaled character size
+            const cannonOriginX = adjustedX + 24 * taolieScale;
+            const cannonOriginY = adjustedY + 16 * taolieScale;
+
+            ctx.save();
+            ctx.translate(cannonOriginX, cannonOriginY);
+            ctx.rotate(taolie.angle);
+
+            ctx.fillStyle = taolie.color;
+            ctx.fillRect(0, -cannonWidth / 2, cannonLength, cannonWidth); // Arm Cannon
+
+            // Small indicator for the barrel
+            ctx.fillStyle = '#FFA500'; // Orange/Yellow for barrel tip
+            ctx.fillRect(cannonLength - 4, -2, 4, 4); // Small square at end of cannon
+
+            ctx.restore();
+
+            // Projectile flare (if shooting)
+            if (projectiles.length > 0 && animationFrame % 6 === 0) {
+                // Calculate flare position based on current angle
+                const flareDistance = cannonLength + 4; // Distance from cannon origin
+                const flareX = cannonOriginX + Math.cos(taolie.angle) * flareDistance;
+                const flareY = cannonOriginY + Math.sin(taolie.angle) * flareDistance;
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(flareX, flareY, 5 * taolieScale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw power-up halo (strength)
+            if (powerUpActive) {
+                const haloRadius = 10 + Math.sin(animationFrame / 12) * 3;
+                const gradient = ctx.createRadialGradient(adjustedX + scaledWidth / 2, adjustedY + scaledHeight / 2, 0, adjustedX + scaledWidth / 2, adjustedY + scaledHeight / 2, haloRadius);
+                gradient.addColorStop(0, '#FF4500');
+                gradient.addColorStop(0.5, '#FF8C00');
+                gradient.addColorStop(1, '#FFD700');
+                ctx.beginPath();
+                ctx.arc(adjustedX + scaledWidth / 2, adjustedY + scaledHeight / 2, haloRadius, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            }
+
+            // Draw shield effect
+            if (shieldPowerUpActive) {
+                const shieldRadius = 15 + Math.sin(animationFrame / 12) * 2;
+                const gradient = ctx.createRadialGradient(adjustedX + scaledWidth / 2, adjustedY + scaledHeight / 2, 0, adjustedX + scaledWidth / 2, adjustedY + scaledHeight / 2, shieldRadius);
+                gradient.addColorStop(0, '#00BFFF');
+                gradient.addColorStop(1, 'rgba(0, 191, 255, 0.3)');
+                ctx.beginPath();
+                ctx.arc(adjustedX + scaledWidth / 2, adjustedY + scaledHeight / 2, shieldRadius, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            }
+        }
+
+        /**
+         * Draws the title screen of the game.
+         */
+        function drawTitleScreen() {
+            drawBackground();
+            ctx.fillStyle = '#00CED1';
+            ctx.font = 'bold 48px Arial';
+            ctx.strokeStyle = '#FF00FF';
+            ctx.lineWidth = 2;
+            ctx.fillText('GPU', canvas.width / 2 - 80, 80);
+            ctx.strokeText('GPU', canvas.width / 2 - 80, 80);
+            ctx.fillText('REBELLION', canvas.width / 2 - 150, 130);
+            ctx.strokeText('REBELLION', canvas.width / 2 - 150, 130);
+
+            ctx.fillStyle = '#800080';
+            ctx.fillRect(20, 180, 80, 30);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('T-MAN', 25, 200);
+
+            drawTaolie(50, 250);
+
+            ctx.fillStyle = '#FFD700';
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                ctx.arc(150 + i * 30, 270, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 10px Arial';
+                ctx.fillText('TAO', 142 + i * 30, 272);
+            }
+
+            // Example Tech Robot in Title Screen (GOOGLE)
+            ctx.fillStyle = '#4285F4'; // Google Blue
+            ctx.fillRect(600, 200, 50, 30); // Body
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('G', 615, 225); // G
+            ctx.fillStyle = '#101010';
+            ctx.fillRect(610, 210, 30, 10); // Eye/Sensor
+
+            // "TAP/CLICK TO START REBELLION" text styled like the title
+            ctx.fillStyle = '#00CED1'; // Cyan fill
+            ctx.strokeStyle = '#FF00FF'; // Magenta stroke
+            ctx.lineWidth = 2; // Match title stroke width
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center'; // Center the text
+            ctx.fillText('TAP/CLICK TO START REBELLION', canvas.width / 2, 350);
+            ctx.strokeText('TAP/CLICK TO START REBELLION', canvas.width / 2, 350);
+            ctx.textAlign = 'left'; // Reset text alignment
+        }
+
+        /**
+         * Draws the background cityscape, now resembling New York.
+         */
+        function drawBackground() {
+            ctx.fillStyle = '#1A3C5E'; // Dark blue sky
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Add some "stars" or city lights in the distant sky
+            for (let i = 0; i < 50; i++) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.1 + 0.05})`; // More subtle stars
+                ctx.fillRect(Math.random() * canvas.width, Math.random() * (canvas.height / 2), 1, 1);
+            }
+
+            // New York City Skyline - simplified pixel art
+            const nycBuildings = [
+                // Far background buildings (darker, less detail)
+                { x: 0, y: 280, width: 80, height: 120, color: '#2F2F2F' },
+                { x: 90, y: 260, width: 70, height: 140, color: '#3A3A3A' },
+                { x: 170, y: 290, width: 90, height: 110, color: '#2F2F2F' },
+                { x: 270, y: 250, width: 100, height: 150, color: '#3A3A3A' },
+                // Mid-ground buildings (more detail, varied heights)
+                { x: 380, y: 220, width: 70, height: 180, color: '#4A4A4A' },
+                { x: 460, y: 200, width: 60, height: 200, color: '#5B5B5B' }, // Taller building
+                { x: 530, y: 230, width: 90, height: 170, color: '#4A4A4A' },
+                { x: 630, y: 210, width: 80, height: 190, color: '#5B5B5B' },
+                { x: 720, y: 240, width: 80, height: 160, color: '#4A4A4A' },
+
+                // Simplified Empire State Building like structure
+                { x: 200, y: 150, width: 50, height: 250, color: '#6A6A6A' }, // Main body
+                { x: 215, y: 120, width: 20, height: 30, color: '#7A7A7A' }, // Spire base
+                { x: 220, y: 100, width: 10, height: 20, color: '#8A8A8A' }, // Spire top
+
+                // Simplified Chrysler Building like structure
+                { x: 500, y: 180, width: 40, height: 220, color: '#6A6A6A' }, // Main body
+                { x: 505, y: 150, width: 30, height: 30, color: '#7A7A7A' }, // Crown base
+                { x: 510, y: 130, width: 20, height: 20, color: '#8A8A8A' }, // Crown middle
+                { x: 515, y: 115, width: 10, height: 15, color: '#9A9A9A' }, // Crown top
+            ];
+
+            nycBuildings.forEach(building => {
+                ctx.fillStyle = building.color;
+                ctx.fillRect(building.x, building.y, building.width, building.height);
+
+                // Add simple, non-blinking windows
+                ctx.fillStyle = '#FFD700'; // Yellow for lit windows
+                for (let i = 0; i < building.height / 20; i++) {
+                    for (let j = 0; j < building.width / 20; j++) {
+                        ctx.fillRect(building.x + 5 + j * 15, building.y + 5 + i * 15, 5, 10);
+                    }
+                }
+            });
+        }
+
+        /**
+         * Resets the game state to start a new game.
+         */
+        function resetGame() {
+            // Reset core game variables
+            score = 0;
+            level = 1;
+            taolieHP = 200;
+            taolie.x = 50;
+            taolie.y = 300;
+            taolie.dy = 0;
+            taolie.isJumping = false;
+            taolie.angle = 0;
+            projectiles.length = 0;
+            enemyProjectiles.length = 0;
+            enemyExplosions = [];
+            powerUps.length = 0;
+            powerUpActive = false;
+            powerUpTimer = 0;
+            projectileDamage = 10;
+            mushroomPowerUpActive = false;
+            mushroomPowerUpTimer = 0;
+            shieldPowerUpActive = false;
+            shieldPowerUpTimer = 0;
+            taolieScale = 1;
+            lastPowerUpSpawn = Date.now() - 7000;
+            defeatedEnemies = 0;
+            enemiesToDefeatForLevel = 0;
+            levelTransitionTimer = 0;
+
+            // Setup level properties (enemies and platforms)
+            setupLevel();
+
+            // Directly go to playing state
+            gameState = 'playing';
+            // Spawn initial enemies immediately
+            while (activeEnemies.length < MAX_ACTIVE_ENEMIES && enemyQueue.length > 0) {
+                spawnNextEnemy();
+            }
+        }
+
+        /**
+         * Sets up the enemies and platforms for the current level.
+         * This function now *only* populates `enemyQueue` and `platforms` based on `level`.
+         * It does NOT manage game state transitions or initial enemy spawning to active list.
+         */
+        function setupLevel() {
+            activeEnemies = []; // Always clear active enemies for a new level setup
+            enemyQueue = []; // Always clear enemy queue for a new level setup
+            defeatedEnemies = 0; // Reset for new level
+
+            // Adjust parameters based on the current level
+            const baseEnemyHP = 50 + (level - 1) * 5;
+            // The shot frequency is now fixed at a minimum for aggressive behavior
+            const MIN_SHOT_FREQ = 1000; // Increased for slower firing
+            const baseEnemySpeed = 2 + (level - 1) * 0.1;
+            const numNormalEnemies = (level % 10 === 0) ? 0 : 10 + Math.floor((level - 1) / 5) * 2;
+            const isBossLevel = (level % 10 === 0);
+
+            enemiesToDefeatForLevel = isBossLevel ? 1 : numNormalEnemies;
+
+            // Different platform patterns for levels
+            platforms = [];
+            if (level % 3 === 1) { // Pattern 1
+                platforms = [{ x: 200, y: 250, width: 150, height: 10, color: '#000000' }, { x: 450, y: 200, width: 150, height: 10, color: '#000000' }];
+            } else if (level % 3 === 2) { // Pattern 2
+                platforms = [{ x: 100, y: 300, width: 200, height: 10, color: '#000000' }, { x: 400, y: 150, width: 150, height: 10, color: '#000000' }, {x: 650, y: 280, width: 100, height: 10, color: '#000000'}];
+            } else { // Pattern 3
+                platforms = [{ x: 300, y: 250, width: 100, height: 10, color: '#000000' }, { x: 600, y: 180, width: 120, height: 10, color: '#000000' }, {x: 50, y: 200, width: 80, height: 10, color: '#000000'}];
+            }
+            // Always a ground platform at the bottom, now black
+            platforms.push({ x: 0, y: canvas.height - 50, width: canvas.width, height: 50, color: '#000000' });
+
+
+            const normalEnemySpawnPoints = [
+                { x: 700, y: 280 }, { x: 600, y: 280 }, { x: 500, y: 280 }, // Ground level
+                { x: 700, y: 140 }, { x: 600, y: 140 }, { x: 500, y: 140 }, // Higher level
+                { x: 750, y: 200 }, { x: 650, y: 200 }, { x: 550, y: 200 }  // Mid level
+            ];
+
+            if (isBossLevel) {
+                // Boss enemy properties
+                const bossHP = baseEnemyHP * 5 + level * 10; // Boss is much stronger
+                const bossSpeed = baseEnemySpeed * 0.5; // Bosses are slower but tougher
+
+                enemyQueue.push({
+                    x: canvas.width - 150, y: canvas.height - 150, width: 80, height: 100,
+                    alive: true, speed: bossSpeed, label: `OVERLORD X`, lastShot: 0,
+                    color: '#000000', explosionTimer: 0, hp: bossHP, shotFreq: MIN_SHOT_FREQ, // Boss also fires minimally
+                    projectileType: 'bossProjectile', isBoss: true, enemyType: 'x_boss'
+                });
+            } else {
+                // Normal enemies based on tech companies
+                const companyTypes = ['google', 'amazon', 'microsoft', 'apple'];
+
+                for (let i = 0; i < numNormalEnemies; i++) {
+                    const companyType = companyTypes[Math.floor(Math.random() * companyTypes.length)];
+                    let enemyProps = {};
+                    let pos = normalEnemySpawnPoints[Math.floor(Math.random() * normalEnemySpawnPoints.length)];
+
+                    switch (companyType) {
+                        case 'google': // Resembles Drone Scout
+                            enemyProps = {
+                                enemyType: 'google',
+                                label: 'GOOGLE', color: '#4285F4', // Google Blue
+                                hp: baseEnemyHP * 0.8, speed: baseEnemySpeed * 1.5,
+                                projectileType: 'singleFast', shotFreq: MIN_SHOT_FREQ,
+                                width: 50, height: 30
+                            };
+                            break;
+                        case 'amazon': // Resembles Heavy Lifter
+                            enemyProps = {
+                                enemyType: 'amazon',
+                                label: 'AMAZON', color: '#FF9900', // Amazon Orange
+                                hp: baseEnemyHP * 2, speed: baseEnemySpeed * 0.5,
+                                projectileType: 'arcBomb', // Changed to arcBomb for "bomb" effect
+                                shotFreq: MIN_SHOT_FREQ,
+                                width: 80, height: 60
+                            };
+                            break;
+                        case 'microsoft': // Resembles Artillery Unit
+                            enemyProps = {
+                                enemyType: 'microsoft',
+                                label: 'MICROSOFT', color: '#00A4EF', // Microsoft Blue
+                                hp: baseEnemyHP * 1.2, speed: baseEnemySpeed * 0.2, // Almost stationary
+                                projectileType: 'arcBomb', // Changed to arcBomb for "bomb" effect
+                                shotFreq: MIN_SHOT_FREQ,
+                                width: 70, height: 70
+                            };
+                            // Artillery units typically spawn on platforms or fixed positions
+                            pos = { x: canvas.width - 150 - Math.random() * 100, y: 100 + Math.random() * 150 };
+                            break;
+                        case 'apple': // Resembles Infiltrator
+                            enemyProps = {
+                                enemyType: 'apple',
+                                label: 'APPLE', color: '#A2AAAD', // Apple Silver/Gray
+                                hp: baseEnemyHP, speed: baseEnemySpeed * 1.2,
+                                projectileType: 'homing', shotFreq: MIN_SHOT_FREQ,
+                                width: 40, height: 50,
+                                isInvisible: false, invisibleTimer: 0
+                            };
+                            break;
+                    }
+
+                    // Adjust Y position so enemy stands on ground/platform
+                    let spawnY = canvas.height - 50 - enemyProps.height; // Default to ground
+                    for (let platform of platforms) {
+                        // Check if the random x position intersects a platform
+                        if (pos.x + enemyProps.width > platform.x && pos.x < platform.x + platform.width) {
+                            spawnY = platform.y - enemyProps.height;
+                            break;
+                        }
+                    }
+
+                    enemyQueue.push({
+                        x: pos.x, y: spawnY, // Adjusted Y position
+                        alive: true, explosionTimer: 0,
+                        lastShot: 0, // lastShot initialized to 0
+                        ...enemyProps
+                    });
+                }
+            }
+
+            // Directly transition to playing and spawn enemies
+            if (level > 1 && gameState === 'level_transition') {
+                gameState = 'playing';
+                while (activeEnemies.length < MAX_ACTIVE_ENEMIES && enemyQueue.length > 0) {
+                    spawnNextEnemy();
+                }
+            }
+        }
+
+        /**
+         * Spawns the next enemy from the queue into active enemies.
+         */
+        function spawnNextEnemy() {
+            if (defeatedEnemies < enemiesToDefeatForLevel && enemyQueue.length > 0) {
+                const nextEnemy = enemyQueue.shift();
+                activeEnemies.push(nextEnemy);
+            }
+        }
+
+        /**
+         * Moves T-Man based on user input and applies gravity.
+         */
+        function moveTaolie() {
+            if (keys['ArrowLeft']) {
+                taolie.x -= taolie.speed;
+                if (taolie.x < 0) taolie.x = 0;
+            }
+            if (keys['ArrowRight']) {
+                taolie.x += taolie.speed;
+                if (taolie.x > canvas.width - taolie.width * taolieScale) {
+                    taolie.x = canvas.width - taolie.width * taolieScale;
+                }
+            }
+            if (keys[' '] && !taolie.isJumping) {
+                taolie.dy = taolie.jumpPower;
+                taolie.isJumping = true;
+            }
+
+            taolie.y += taolie.dy;
+            taolie.dy += taolie.gravity;
+
+            let onPlatform = false;
+            for (let platform of platforms) {
+                if (
+                    taolie.x + taolie.width * taolieScale > platform.x &&
+                    taolie.x < platform.x + platform.width &&
+                    taolie.y + taolie.height * taolieScale > platform.y &&
+                    taolie.y + taolie.height * taolieScale < platform.y + platform.height + 10 &&
+                    taolie.dy > 0
+                ) {
+                    taolie.y = platform.y - taolie.height * taolieScale;
+                    taolie.dy = 0;
+                    taolie.isJumping = false;
+                    onPlatform = true;
+                    break;
+                }
+            }
+
+            if (!onPlatform && taolie.y > canvas.height - taolie.height * taolieScale - 50) {
+                taolie.y = canvas.height - taolie.height * taolieScale - 50;
+                taolie.dy = 0;
+                taolie.isJumping = false;
+            }
+        }
+
+        /**
+         * Fires projectiles from T-Man automatically.
+         */
+        function shootTAO() {
+            const now = Date.now();
+            // Calculate base projectile position (origin of cannon)
+            // Using T-Man's actual position and scale for the cannon origin
+            const cannonOriginX = taolie.x + (24 * taolieScale);
+            const cannonOriginY = taolie.y + (16 * taolieScale);
+
+            if (now - lastShot > (currentWeapon === 'tao' ? 300 : 150)) {
+                if (currentWeapon === 'tao') {
+                    const currentAngle = taolie.angle;
+                    const calculatedSpeedX = projectileSpeed * Math.cos(currentAngle);
+                    const calculatedSpeedY = projectileSpeed * Math.sin(currentAngle);
+
+                    if (mushroomPowerUpActive) {
+                        // Wide shot when mushroom power-up is active, spread around current angle
+                        const spreadAngleIncrement = Math.PI / 18; // 10 degrees spread
+                        for (let i = -2; i <= 2; i++) { // 5 projectiles
+                            const projectileAngle = currentAngle + (i * spreadAngleIncrement);
+                            projectiles.push({
+                                x: cannonOriginX,
+                                y: cannonOriginY,
+                                width: projectileSize,
+                                height: projectileSize,
+                                damage: projectileDamage,
+                                speedX: projectileSpeed * Math.cos(projectileAngle),
+                                speedY: projectileSpeed * Math.sin(projectileAngle)
+                            });
+                        }
+                    } else {
+                        // Single shot
+                        projectiles.push({
+                            x: cannonOriginX,
+                            y: cannonOriginY,
+                            width: projectileSize,
+                            height: projectileSize,
+                            damage: projectileDamage,
+                            speedX: calculatedSpeedX,
+                            speedY: calculatedSpeedY
+                        });
+                    }
+                } else if (currentWeapon === 'burst') {
+                    const currentAngle = taolie.angle;
+                    const spreadAngleIncrement = Math.PI / 36; // 5 degrees spread for burst effect
+                    for (let i = -1; i <= 1; i++) { // 3 projectiles for burst
+                        const projectileAngle = currentAngle + (i * spreadAngleIncrement);
+                        projectiles.push({
+                            x: cannonOriginX,
+                            y: cannonOriginY,
+                            width: projectileSize,
+                            height: projectileSize,
+                            damage: projectileDamage,
+                            speedX: projectileSpeed * Math.cos(projectileAngle),
+                            speedY: projectileSpeed * Math.sin(projectileAngle)
+                        });
+                    }
+                }
+                // Add particles for strong shots
+                if (projectileDamage === 20) {
+                    for (let i = 0; i < 5; i++) {
+                        particles.push({
+                            x: cannonOriginX,
+                            y: cannonOriginY,
+                            size: 3,
+                            speedX: Math.random() * 4 - 2,
+                            speedY: Math.random() * 4 - 2,
+                            life: 20
+                        });
+                    }
+                }
+                lastShot = now;
+            }
+        }
+
+        /**
+         * Moves enemies and handles their shooting patterns.
+         */
+        function moveEnemies() {
+            activeEnemies.forEach(enemy => {
+                if (enemy.alive) {
+                    // General enemy movement
+                    enemy.x -= enemy.speed;
+
+                    // Enemy-specific logic
+                    if (enemy.enemyType === 'google') {
+                        // Drone Scout style: flies straight, wraps around
+                        if (enemy.x < -enemy.width) {
+                            enemy.x = canvas.width;
+                            // Reset Y to a new random higher position
+                            enemy.y = Math.random() * (canvas.height - 150) + 50;
+                        }
+                    } else if (enemy.enemyType === 'amazon') {
+                        // Heavy Lifter style: moves slower, stays on ground/platform
+                        if (enemy.x < -enemy.width) {
+                            enemy.x = canvas.width;
+                            // Reset Y to ground or nearest platform
+                            let spawnY = canvas.height - 50 - enemy.height;
+                            const potentialPlatforms = platforms.filter(p => p.x < canvas.width && p.x + p.width > canvas.width - enemy.width);
+                            if (potentialPlatforms.length > 0) {
+                                spawnY = potentialPlatforms[0].y - enemy.height;
+                            }
+                            enemy.y = spawnY;
+                        }
+                    } else if (enemy.enemyType === 'microsoft') {
+                        // Artillery Unit style: very slow movement, stops near middle
+                        enemy.speed = (level % 10 === 0) ? 0.5 : 0.2; // Slow crawl for artillery
+                        if (enemy.x < canvas.width / 2) enemy.speed = 0; // Stop near middle
+                    } else if (enemy.enemyType === 'apple') {
+                        // Infiltrator style: flickers invisible
+                        enemy.invisibleTimer -= 1;
+                        if (enemy.invisibleTimer <= 0) {
+                            enemy.isInvisible = !enemy.isInvisible;
+                            enemy.invisibleTimer = Math.random() * 120 + 60; // 1-2 seconds visible/invisible
+                        }
+                        if (enemy.x < -enemy.width) { // Wraps around
+                            enemy.x = canvas.width;
+                            enemy.y = Math.random() * (canvas.height - 150) + 50;
+                        }
+                    } else if (enemy.isBoss) {
+                        // Boss movement (oscillates horizontally)
+                        if (enemy.x < canvas.width - enemy.width - 200 && enemy.speed < 0) enemy.speed *= -1; // Change direction
+                        if (enemy.x > canvas.width - enemy.width - 50 && enemy.speed > 0) enemy.speed *= -1;
+                    }
+
+
+                    const now = Date.now();
+                    // Enemies shoot consistently when their shotFreq cooldown is met
+                    if (now - enemy.lastShot > enemy.shotFreq) {
+                        if (enemy.isBoss) {
+                            // Boss attack pattern: combination of burst and homing
+                            for (let i = 0; i < 5; i++) { // Burst
+                                // Calculate angle to T-Man for boss projectiles to aim
+                                const angleToTaolie = Math.atan2(taolie.y - enemy.y, taolie.x - enemy.x);
+                                const projectileAngle = angleToTaolie + (i - 2) * 0.1; // Small spread around T-Man
+                                enemyProjectiles.push({
+                                    x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height / 2,
+                                    width: 15, height: 15,
+                                    speedX: 5 * Math.cos(projectileAngle), speedY: 5 * Math.sin(projectileAngle),
+                                    color: '#FF00FF', // Magenta burst
+                                    type: 'bossProjectile'
+                                });
+                            }
+                            enemyProjectiles.push({ // Homing
+                                x: enemy.x + enemy.width / 2, y: enemy.y + enemy.height / 2,
+                                width: 10, height: 10,
+                                speed: -3, homing: true, color: '#FFFF00', // Yellow homing
+                                type: 'bossHoming'
+                            });
+                        } else if (enemy.projectileType === 'singleFast') {
+                            // Calculate angle to T-Man for singleFast projectiles
+                            const angleToTaolie = Math.atan2(taolie.y - enemy.y, taolie.x - enemy.x);
+                            enemyProjectiles.push({
+                                x: enemy.x, y: enemy.y + enemy.height / 2 - 5,
+                                width: 10, height: 10,
+                                speedX: 8 * Math.cos(angleToTaolie), speedY: 8 * Math.sin(angleToTaolie),
+                                color: '#3CB371', // Green for Google drones
+                                type: 'singleFast'
+                            });
+                        } else if (enemy.projectileType === 'arcBomb') { // New 'arcBomb' type
+                            enemyProjectiles.push({
+                                x: enemy.x + enemy.width / 2, // From center of enemy
+                                y: enemy.y + enemy.height / 2,
+                                width: 20, height: 20,
+                                speedX: -4 - Math.random() * 2,
+                                speedY: -8 - Math.random() * 4,
+                                gravity: 0.4, // Stronger gravity for a bomb-like arc
+                                color: '#555555', // Darker color for bomb
+                                type: 'arcBomb'
+                            });
+                        } else if (enemy.projectileType === 'homing') {
+                            enemyProjectiles.push({
+                                x: enemy.x, y: enemy.y + enemy.height / 2 - 5,
+                                width: 10, height: 10, speed: -4, homing: true, color: '#9932CC', // Violet for Apple homing
+                                type: 'homing'
+                            });
+                        }
+                        enemy.lastShot = now; // Ensure this is updated after firing
+                    }
+                } else if (enemy.explosionTimer > 0) {
+                    enemy.explosionTimer -= 16;
+                    if (enemy.explosionTimer <= 0) {
+                        const index = activeEnemies.indexOf(enemy);
+                        activeEnemies.splice(index, 1);
+                        defeatedEnemies++;
+                        // Only spawn new normal enemies if not a boss and not all normal enemies defeated
+                        if (!enemy.isBoss && defeatedEnemies < enemiesToDefeatForLevel) {
+                            spawnNextEnemy();
+                        }
+
+                        // Check for level completion
+                        if (defeatedEnemies >= enemiesToDefeatForLevel && activeEnemies.length === 0 && enemyQueue.length === 0) {
+                            if (level < 100) { // Max 100 levels
+                                level++;
+                                gameState = 'level_transition'; // Will directly set playing state in setupLevel
+                            } else {
+                                gameState = 'win'; // Game won after 100 levels
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update enemy projectiles (homing, gravity)
+            enemyProjectiles.forEach((proj, index) => {
+                if (proj.homing) {
+                    const angleToPlayer = Math.atan2(taolie.y - proj.y, taolie.x - proj.x);
+                    proj.x += Math.cos(angleToPlayer) * proj.speed;
+                    proj.y += Math.sin(angleToPlayer) * proj.speed;
+                } else if (proj.gravity) {
+                    proj.x += proj.speedX;
+                    proj.y += proj.speedY;
+                    proj.speedY += proj.gravity; // Apply gravity
+                } else {
+                    // For singleFast and bossProjectile, use speedX and speedY
+                    proj.x += proj.speedX;
+                    proj.y += proj.speedY;
+                }
+                // Check if projectile is off-screen before removing
+                if (proj.x < -proj.width || proj.x > canvas.width + proj.width || proj.y > canvas.height + proj.height) {
+                    enemyProjectiles.splice(index, 1);
+                }
+            });
+
+            // Update particles
+            particles.forEach((particle, index) => {
+                particle.x += particle.speedX;
+                particle.y += particle.speedY;
+                particle.life -= 1;
+                if (particle.life <= 0) {
+                    particles.splice(index, 1);
+                }
+            });
+
+            // Ensure MAX_ACTIVE_ENEMIES are on screen if available in the queue
+            while (activeEnemies.length < MAX_ACTIVE_ENEMIES && enemyQueue.length > 0) {
+                spawnNextEnemy();
+            }
+        }
+
+        /**
+         * Checks for collisions between T-Man, projectiles, enemies, and power-ups.
+         */
+        function checkCollisions() {
+            // Player projectiles vs Enemies
+            projectiles.forEach((proj, pIndex) => {
+                activeEnemies.forEach((enemy, eIndex) => {
+                    if (
+                        enemy.alive &&
+                        proj.x < enemy.x + enemy.width &&
+                        proj.x + proj.width > enemy.x &&
+                        proj.y < enemy.y + enemy.height &&
+                        proj.y + proj.height > enemy.y
+                    ) {
+                        enemy.hp -= proj.damage;
+                        // Add hit particles for visual feedback
+                        for (let i = 0; i < 3; i++) {
+                            particles.push({
+                                x: proj.x + proj.width / 2, y: proj.y + proj.height / 2,
+                                size: 2,
+                                speedX: Math.random() * 3 - 1.5, speedY: Math.random() * 3 - 1.5,
+                                life: 10, color: '#FFD700'
+                            });
+                        }
+                        projectiles.splice(pIndex, 1); // Remove projectile on hit
+                        if (enemy.hp <= 0) {
+                            enemy.alive = false;
+                            enemy.explosionTimer = 500; // Start explosion animation
+                            score += enemy.isBoss ? 500 : 100; // More points for bosses
+                            // Spawn power-up on enemy defeat (random chance)
+                            if (Math.random() < 0.2 || enemy.isBoss) { // Higher chance for bosses
+                                const powerUpTypes = ['health', 'strength', 'mushroom', 'shield'];
+                                const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+                                powerUps.push({
+                                    x: enemy.x + enemy.width / 2,
+                                    y: enemy.y + enemy.height / 2,
+                                    width: 20, height: 20,
+                                    type: type,
+                                    dy: -5, gravity: 0.3 // Power-ups float up then fall
+                                });
+                            }
+                        }
+                    }
+                });
+                // Remove projectiles that go off-screen
+                proj.x += proj.speedX;
+                proj.y += proj.speedY;
+                if (proj.x > canvas.width || proj.y < 0 || proj.y > canvas.height) {
+                    projectiles.splice(pIndex, 1);
+                }
+            });
+
+            // Enemy Projectiles vs Taolie (if no shield active)
+            if (!shieldPowerUpActive) {
+                enemyProjectiles.forEach((proj, eIndex) => {
+                    if (
+                        proj.x < taolie.x + taolie.width * taolieScale &&
+                        proj.x + proj.width > taolie.x &&
+                        proj.y < taolie.y + taolie.height * taolieScale &&
+                        proj.y + proj.height > taolie.y
+                    ) {
+                        // Apply scaled enemy projectile damage
+                        taolieHP -= (enemyProjectileBaseDamage + (level - 1) * enemyDamageIncreasePerLevel);
+                        enemyProjectiles.splice(eIndex, 1); // Remove projectile on hit
+                        if (taolieHP <= 0) {
+                            taolieHP = 0;
+                            gameState = 'death'; // Game over
+                        }
+                    }
+                });
+
+                // Enemies vs Taolie (contact damage)
+                activeEnemies.forEach(enemy => {
+                    if (
+                        enemy.alive &&
+                        taolie.x < enemy.x + enemy.width &&
+                        taolie.x + taolie.width * taolieScale > enemy.x &&
+                        taolie.y < enemy.y + enemy.height &&
+                        taolie.y + taolie.height * taolieScale > enemy.y
+                    ) {
+                        taolieHP -= 5; // Reduced damage for contact
+                        if (taolieHP <= 0) {
+                            taolieHP = 0;
+                            gameState = 'death';
+                        }
+                        // Knockback Taolie a bit
+                        taolie.x += (taolie.x > enemy.x ? 1 : -1) * 10;
+                    }
+                });
+            } else {
+                // Shield absorbs enemy projectiles
+                enemyProjectiles.forEach((proj, eIndex) => {
+                    const shieldRadius = 15 + Math.sin(animationFrame / 12) * 2; // Match drawing
+                    const taolieCenterX = taolie.x + taolie.width * taolieScale / 2;
+                    const taolieCenterY = taolie.y + taolie.height * taolieScale / 2;
+                    const dist = Math.sqrt(Math.pow(proj.x - taolieCenterX, 2) + Math.pow(proj.y - taolieCenterY, 2));
+
+                    if (dist < shieldRadius + proj.width / 2) {
+                        enemyProjectiles.splice(eIndex, 1); // Projectile absorbed
+                        for (let i = 0; i < 5; i++) { // Shield hit particles
+                            particles.push({
+                                x: proj.x, y: proj.y,
+                                size: 3,
+                                speedX: Math.random() * 4 - 2, speedY: Math.random() * 4 - 2,
+                                life: 15, color: '#00BFFF'
+                            });
+                        }
+                    }
+                });
+            }
+
+            // Power-ups vs Taolie
+            powerUps.forEach((power, pIndex) => {
+                if (
+                    taolie.x < power.x + power.width &&
+                    taolie.x + taolie.width * taolieScale > power.x &&
+                    taolie.y < power.y + power.height &&
+                    taolie.y + taolie.height * taolieScale > power.y // Corrected line
+                ) {
+                    if (power.type === 'health') {
+                        if (taolieHP < 200) {
+                            taolieHP = Math.min(200, taolieHP + 25); // More health
+                        }
+                    } else if (power.type === 'strength') {
+                        powerUpActive = true;
+                        powerUpTimer = 10000;
+                        projectileDamage = 20;
+                    } else if (power.type === 'mushroom') {
+                        mushroomPowerUpActive = true;
+                        mushroomPowerUpTimer = 10000;
+                        taolieScale = 1.5;
+                    } else if (power.type === 'shield') {
+                        shieldPowerUpActive = true;
+                        shieldPowerUpTimer = 10000;
+                    }
+                    powerUps.splice(pIndex, 1); // Remove power-up after collection
+                }
+                // Apply gravity to power-ups
+                power.y += power.dy;
+                power.dy += power.gravity;
+                if (power.y + power.height > canvas.height - 50) { // Stop at ground
+                    power.y = canvas.height - 50 - power.height;
+                    power.dy = 0;
+                }
+            });
+
+            // Power-up timers
+            if (powerUpActive && powerUpTimer > 0) {
+                powerUpTimer -= 16;
+                if (powerUpTimer <= 0) {
+                    powerUpActive = false;
+                    projectileDamage = 10;
+                }
+            }
+            if (mushroomPowerUpActive && mushroomPowerUpTimer > 0) {
+                mushroomPowerUpTimer -= 16;
+                if (mushroomPowerUpTimer <= 0) {
+                    mushroomPowerUpActive = false;
+                    taolieScale = 1;
+                }
+            }
+            if (shieldPowerUpActive && shieldPowerUpTimer > 0) {
+                shieldPowerUpTimer -= 16;
+                if (shieldPowerUpTimer <= 0) {
+                    shieldPowerUpActive = false;
+                }
+            }
+        }
+
+        /**
+         * Draws the main game elements (background, player, enemies, projectiles, UI).
+         */
+        function drawGame() {
+            drawBackground();
+
+            // Draw platforms (including the ground platform)
+            platforms.forEach(platform => {
+                ctx.fillStyle = platform.color || '#000000'; // Default to black
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            });
+
+            drawTaolie(taolie.x, taolie.y);
+
+            // Draw player projectiles
+            ctx.fillStyle = '#FFD700';
+            projectiles.forEach(proj => {
+                ctx.beginPath();
+                ctx.arc(proj.x + proj.width / 2, proj.y + proj.height / 2, proj.width / 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 8px Arial';
+                ctx.fillText('TAO', proj.x + 2, proj.y + 8);
+            });
+
+            // Draw particles
+            particles.forEach(particle => {
+                ctx.fillStyle = particle.color || '#FFA500'; // Particles can have specific colors
+                ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
+            });
+
+            // Draw enemy projectiles
+            enemyProjectiles.forEach(proj => {
+                ctx.fillStyle = proj.color || '#800000'; // Default color if not specified
+                // Draw distinct projectiles based on their type
+                if (proj.type === 'arcBomb') {
+                    // Larger bomb with a red dot in the middle
+                    ctx.beginPath();
+                    ctx.arc(proj.x + proj.width / 2, proj.y + proj.height / 2, proj.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FF0000'; // Red dot for bomb
+                    ctx.beginPath();
+                    ctx.arc(proj.x + proj.width / 2, proj.y + proj.height / 2, proj.width / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (proj.type === 'singleFast') {
+                    // Small green triangle
+                    ctx.fillStyle = '#3CB371'; // Green color for drone projectiles
+                    ctx.beginPath();
+                    ctx.moveTo(proj.x, proj.y + proj.height / 2);
+                    ctx.lineTo(proj.x + proj.width, proj.y);
+                    ctx.lineTo(proj.x + proj.width, proj.y + proj.height);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (proj.type === 'homing') {
+                    // Small violet diamond
+                    ctx.fillStyle = '#9932CC'; // Violet for homing
+                    ctx.beginPath();
+                    ctx.moveTo(proj.x + proj.width / 2, proj.y);
+                    ctx.lineTo(proj.x + proj.width, proj.y + proj.height / 2);
+                    ctx.lineTo(proj.x + proj.width / 2, proj.y + proj.height);
+                    ctx.lineTo(proj.x, proj.y + proj.height / 2);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (proj.type === 'bossProjectile') {
+                    // Magenta square for boss burst
+                    ctx.fillStyle = '#FF00FF'; // Magenta
+                    ctx.fillRect(proj.x, proj.y, proj.width, proj.height);
+                } else if (proj.type === 'bossHoming') {
+                    // Yellow star for boss homing (simplified as small circle)
+                    ctx.fillStyle = '#FFFF00';
+                    ctx.beginPath();
+                    ctx.arc(proj.x + proj.width / 2, proj.y + proj.height / 2, proj.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Add a small inner cross for star effect
+                    ctx.strokeStyle = '#FFA500';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(proj.x + proj.width * 0.25, proj.y + proj.height / 2);
+                    ctx.lineTo(proj.x + proj.width * 0.75, proj.y + proj.height / 2);
+                    ctx.moveTo(proj.x + proj.width / 2, proj.y + proj.height * 0.25);
+                    ctx.lineTo(proj.x + proj.width / 2, proj.y + proj.height * 0.75);
+                    ctx.stroke();
+                } else {
+                    // Fallback for any unhandled projectile types (simple rectangle)
+                    ctx.fillRect(proj.x, proj.y, proj.width, proj.height);
+                }
+            });
+
+            // Draw active enemies
+            activeEnemies.forEach(enemy => {
+                if (enemy.alive) {
+                    ctx.fillStyle = enemy.color;
+
+                    // Draw company specific logo/design
+                    if (enemy.enemyType === 'google') {
+                        // Google Drone: Rounded body with a prominent sensor/eye and the colorful G.
+                        ctx.beginPath();
+                        ctx.arc(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemy.width / 2, 0, Math.PI * 2);
+                        ctx.fill(); // Main body
+
+                        ctx.save();
+                        ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, enemy.width * 0.4, 0, Math.PI * 2);
+                        ctx.clip(); // Clip to inner circle
+
+                        // Blue segment
+                        ctx.fillStyle = '#4285F4';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.arc(0, 0, enemy.width * 0.4, -Math.PI / 2 + 0.1, 0 + 0.1);
+                        ctx.lineTo(0, 0);
+                        ctx.fill();
+
+                        // Red segment
+                        ctx.fillStyle = '#EA4335';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.arc(0, 0, enemy.width * 0.4, 0 + 0.1, Math.PI / 2 + 0.1);
+                        ctx.lineTo(0, 0);
+                        ctx.fill();
+
+                        // Yellow segment
+                        ctx.fillStyle = '#FBBC05';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.arc(0, 0, enemy.width * 0.4, Math.PI / 2 + 0.1, Math.PI + 0.1);
+                        ctx.lineTo(0, 0);
+                        ctx.fill();
+
+                        // Green segment
+                        ctx.fillStyle = '#34A853';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.arc(0, 0, enemy.width * 0.4, Math.PI + 0.1, 3 * Math.PI / 2 + 0.1);
+                        ctx.lineTo(0, 0);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, enemy.width * 0.2, 0, Math.PI * 2); // White inner circle for G
+                        ctx.fill();
+
+                        ctx.restore(); // Restore canvas state
+                        ctx.fillStyle = '#101010';
+                        ctx.fillRect(enemy.x + enemy.width / 4, enemy.y + enemy.height / 4, enemy.width / 2, enemy.height / 4); // Eye/Sensor
+                    } else if (enemy.enemyType === 'amazon') {
+                        // Amazon Heavy Lifter: Blocky, strong look with tracks.
+                        ctx.fillStyle = enemy.color;
+                        ctx.fillRect(enemy.x, enemy.y + enemy.height * 0.2, enemy.width, enemy.height * 0.8); // Main body
+                        ctx.fillRect(enemy.x + enemy.width * 0.1, enemy.y, enemy.width * 0.8, enemy.height * 0.2); // Top part (head)
+
+                        ctx.fillStyle = '#222222'; // Very dark gray for tracks
+                        ctx.fillRect(enemy.x - 5, enemy.y + enemy.height - 10, enemy.width + 10, 10); // Bottom track
+                        ctx.fillRect(enemy.x - 5, enemy.y + enemy.height - 20, 5, 10); // Track detail
+                        ctx.fillRect(enemy.x + enemy.width, enemy.y + enemy.height - 20, 5, 10); // Track detail
+
+                        ctx.fillStyle = '#000000'; // Black for details
+                        ctx.font = 'bold 16px Arial';
+                        ctx.fillText('A', enemy.x + enemy.width * 0.1, enemy.y + enemy.height * 0.5);
+                        ctx.fillText('Z', enemy.x + enemy.width * 0.6, enemy.y + enemy.height * 0.8);
+                        ctx.beginPath();
+                        ctx.moveTo(enemy.x + enemy.width * 0.1 + 10, enemy.y + enemy.height * 0.6); // Start of arrow from A
+                        ctx.quadraticCurveTo(
+                            enemy.x + enemy.width * 0.3, enemy.y + enemy.height * 0.9,
+                            enemy.x + enemy.width * 0.6 + 10, enemy.y + enemy.height * 0.8
+                        );
+                        ctx.lineTo(enemy.x + enemy.width * 0.6 + 5, enemy.y + enemy.height * 0.8 + 5); // Arrowhead
+                        ctx.lineTo(enemy.x + enemy.width * 0.6 + 15, enemy.y + enemy.height * 0.8 + 5);
+                        ctx.fill();
+                    } else if (enemy.enemyType === 'microsoft') {
+                        // Microsoft Artillery: Stable base with a rotating turret.
+                        ctx.fillStyle = '#111111'; // Very dark gray/near black for base
+                        ctx.fillRect(enemy.x, enemy.y + enemy.height * 0.7, enemy.width, enemy.height * 0.3); // Base part
+                        ctx.beginPath();
+                        ctx.arc(enemy.x + enemy.width / 2, enemy.y + enemy.height * 0.7, enemy.width * 0.4, 0, Math.PI * 2);
+                        ctx.fill(); // Round track base
+
+                        ctx.fillStyle = enemy.color; // Turret color
+                        ctx.beginPath();
+                        ctx.moveTo(enemy.x + enemy.width * 0.2, enemy.y + enemy.height * 0.7);
+                        ctx.lineTo(enemy.x + enemy.width * 0.5, enemy.y);
+                        ctx.lineTo(enemy.x + enemy.width * 0.8, enemy.y + enemy.height * 0.7);
+                        ctx.closePath();
+                        ctx.fill(); // Turret (triangular top)
+
+                        // Microsoft logo (4 squares)
+                        const sqSize = enemy.width / 8; // Smaller squares for details
+                        const startX = enemy.x + enemy.width / 2 - sqSize;
+                        const startY = enemy.y + enemy.height * 0.2;
+                        ctx.fillStyle = '#F25022'; // Red
+                        ctx.fillRect(startX, startY, sqSize, sqSize);
+                        ctx.fillStyle = '#7FBA00'; // Green
+                        ctx.fillRect(startX + sqSize, startY, sqSize, sqSize);
+                        ctx.fillStyle = '#00A4EF'; // Blue
+                        ctx.fillRect(startX, startY + sqSize, sqSize, sqSize);
+                        ctx.fillStyle = '#FFB900'; // Yellow
+                        ctx.fillRect(startX + sqSize, startY + sqSize, sqSize, sqSize);
+
+                        ctx.fillStyle = '#555555'; // Barrel color
+                        ctx.fillRect(enemy.x + enemy.width * 0.45, enemy.y - 10, enemy.width * 0.1, 20); // Barrel
+                    } else if (enemy.enemyType === 'apple') {
+                        // Apple Infiltrator: Sleek apple shape with a "bite" and a leaf.
+                        if (!enemy.isInvisible || animationFrame % 10 < 5) { // Flickering when invisible
+                            ctx.fillStyle = enemy.color;
+                            ctx.beginPath();
+                            ctx.moveTo(enemy.x + enemy.width * 0.2, enemy.y + enemy.height * 0.5); // "Bite" start
+                            ctx.quadraticCurveTo(enemy.x, enemy.y, enemy.x + enemy.width / 2, enemy.y);
+                            ctx.quadraticCurveTo(enemy.x + enemy.width, enemy.y, enemy.x + enemy.width * 0.8, enemy.y + enemy.height * 0.5);
+                            ctx.quadraticCurveTo(enemy.x + enemy.width, enemy.y + enemy.height, enemy.x + enemy.width / 2, enemy.y + enemy.height);
+                            ctx.quadraticCurveTo(enemy.x, enemy.y + enemy.height, enemy.x + enemy.width * 0.2, enemy.y + enemy.height * 0.5);
+                            ctx.closePath();
+                            ctx.fill();
+                            // A small leaf
+                            ctx.fillStyle = '#006400';
+                            ctx.beginPath();
+                            ctx.ellipse(enemy.x + enemy.width * 0.6, enemy.y + enemy.height * 0.1, 5, 10, -Math.PI / 4, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    } else if (enemy.enemyType === 'x_boss') {
+                        // X Corp. Boss: Large, angular, menacing.
+                        ctx.fillStyle = enemy.color; // Black
+                        ctx.fillRect(enemy.x + enemy.width * 0.1, enemy.y + enemy.height * 0.1, enemy.width * 0.8, enemy.height * 0.8); // Main central body
+
+                        ctx.fillStyle = '#1a1a1a'; // Very dark gray for accents
+                        ctx.beginPath();
+                        ctx.moveTo(enemy.x, enemy.y + enemy.height * 0.2);
+                        ctx.lineTo(enemy.x + enemy.width * 0.1, enemy.y + enemy.height * 0.1);
+                        ctx.lineTo(enemy.x + enemy.width * 0.1, enemy.y + enemy.height * 0.9);
+                        ctx.lineTo(enemy.x, enemy.y + enemy.height * 0.8);
+                        ctx.closePath();
+                        ctx.fill(); // Left "arm"
+
+                        ctx.beginPath();
+                        ctx.moveTo(enemy.x + enemy.width, enemy.y + enemy.height * 0.2);
+                        ctx.lineTo(enemy.x + enemy.width * 0.9, enemy.y + enemy.height * 0.1);
+                        ctx.lineTo(enemy.x + enemy.width * 0.9, enemy.y + enemy.height * 0.9);
+                        ctx.lineTo(enemy.x + enemy.width, enemy.y + enemy.height * 0.8);
+                        ctx.closePath();
+                        ctx.fill(); // Right "arm"
+
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = 'bold 60px Arial'; // Larger X
+                        ctx.textAlign = 'center';
+                        ctx.fillText('X', enemy.x + enemy.width / 2, enemy.y + enemy.height / 2 + 15); // Adjust Y for vertical centering
+                        ctx.textAlign = 'left'; // Reset text alignment
+                    }
+
+                    // Health bar for enemies
+                    const healthBarWidth = enemy.width;
+                    const healthBarHeight = 3;
+                    ctx.fillStyle = '#FF0000';
+                    ctx.fillRect(enemy.x, enemy.y - 10, healthBarWidth, healthBarHeight);
+                    ctx.fillStyle = '#00FF00';
+                    // Calculate original max HP for health bar display
+                    const originalMaxHP = enemy.isBoss ? (50 + (level - 1) * 5) * 5 + level * 10 : (50 + (level - 1) * 5);
+                    ctx.fillRect(enemy.x, enemy.y - 10, healthBarWidth * (enemy.hp / originalMaxHP), healthBarHeight);
+                } else if (enemy.explosionTimer > 0) {
+                    // Draw explosion when enemy is defeated
+                    ctx.fillStyle = `rgba(255, ${Math.floor(enemy.explosionTimer / 2)}, 0, ${enemy.explosionTimer / 500})`;
+                    ctx.beginPath();
+                    ctx.arc(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, (500 - enemy.explosionTimer) / 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw power-ups
+            powerUps.forEach(power => {
+                ctx.fillStyle = power.type === 'health' ? '#FF0000' :
+                                power.type === 'strength' ? '#FF8C00' : // Orange
+                                power.type === 'mushroom' ? '#8B008B' :
+                                power.type === 'shield' ? '#00BFFF' : '#FFFFFF';
+                ctx.fillRect(power.x, power.y, power.width, power.height);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 8px Arial';
+                if (power.type === 'health') ctx.fillText('HP', power.x + 3, power.y + 13);
+                else if (power.type === 'strength') ctx.fillText('STR', power.x + 1, power.y + 13);
+                else if (power.type === 'mushroom') ctx.fillText('BIG', power.x + 2, power.y + 13);
+                else if (power.type === 'shield') ctx.fillText('SHD', power.x + 1, power.y + 13);
+            });
+
+            // UI elements (score, level, HP)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(`SCORE: ${score}`, 10, 20);
+            ctx.fillText(`LEVEL: ${level}`, 10, 40);
+            ctx.fillText(`HP: ${taolieHP}`, 10, 60);
+
+            // Power-up timers display
+            if (powerUpActive) ctx.fillText(`STRENGTH BOOST: ${Math.ceil(powerUpTimer / 1000)}s`, canvas.width - 200, 20);
+            if (mushroomPowerUpActive) ctx.fillText(`SIZE BOOST: ${Math.ceil(mushroomPowerUpTimer / 1000)}s`, canvas.width - 200, 40);
+            if (shieldPowerUpActive) ctx.fillText(`SHIELD: ${Math.ceil(shieldPowerUpTimer / 1000)}s`, canvas.width - 200, 60);
+
+            // Level transition screen
+            if (gameState === 'level_transition') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black overlay
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#00CED1'; // Cyan color
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`LEVEL ${level}`, canvas.width / 2, canvas.height / 2 - 20);
+                ctx.font = 'bold 24px Arial';
+                if (level % 10 === 0) {
+                    ctx.fillText('PREPARE FOR OVERLORD!', canvas.width / 2, canvas.height / 2 + 30);
+                } else {
+                    ctx.fillText('NEW CHALLENGES AHEAD!', canvas.width / 2, canvas.height / 2 + 30);
+                }
+                ctx.textAlign = 'left'; // Reset text alignment
+            }
+        }
+
+        /**
+         * Draws the main menu screen.
+         */
+        function drawMainMenu() {
+            drawBackground(); // Keep background consistent
+            ctx.fillStyle = '#00CED1';
+            ctx.font = 'bold 48px Arial';
+            ctx.strokeStyle = '#FF00FF';
+            ctx.lineWidth = 2;
+            ctx.textAlign = 'center';
+            ctx.fillText('GPU', canvas.width / 2, 80);
+            ctx.strokeText('GPU', canvas.width / 2, 80);
+            ctx.fillText('REBELLION', canvas.width / 2, 130);
+            ctx.strokeText('REBELLION', canvas.width / 2, 130);
+
+            // Add a semi-transparent panel for menu options to ensure black text readability
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; // Light transparent background
+            // Adjust rectangle size to fit the remaining two options
+            ctx.fillRect(canvas.width / 2 - 200, 220, 400, mainMenuOptions.length * 50 + 20);
+
+            // Draw menu options
+            for (let i = 0; i < mainMenuOptions.length; i++) {
+                const optionText = mainMenuOptions[i];
+                ctx.font = (selectedMenuOption === i) ? 'bold 36px Arial' : '30px Arial';
+                // Set color to black for unselected, violet for selected
+                ctx.fillStyle = (selectedMenuOption === i) ? '#800080' : '#000000';
+
+                // Only apply stroke to "Start Game" when selected, and "Start Game" is at index 0 now
+                if (selectedMenuOption === i && optionText === "Start Game") {
+                    ctx.strokeStyle = '#000000'; // Black stroke
+                    ctx.lineWidth = 2;
+                    ctx.strokeText(optionText, canvas.width / 2, 250 + i * 50);
+                }
+                ctx.fillText(optionText, canvas.width / 2, 250 + i * 50);
+            }
+            ctx.textAlign = 'left'; // Reset text alignment
+        }
+
+        /**
+         * Draws the game info screen.
+         */
+        function drawGameInfo() {
+            // Draw a semi-transparent overlay to ensure text readability - changed to lighter
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Lighter semi-transparent white
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#00CED1'; // Title color remains cyan
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME INFORMATION', canvas.width / 2, 80); // Translated title
+
+            // Instructions text and Power-Ups text changed to black
+            ctx.fillStyle = '#000000'; // Black for main text
+            ctx.font = '20px Arial';
+            ctx.fillText('Instructions:', canvas.width / 2, 150);
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('• Use LEFT/RIGHT arrows to move T-Man.', canvas.width / 2 - 200, 180);
+            ctx.fillText('• Press SPACE to jump.', canvas.width / 2 - 200, 200);
+            ctx.fillText('• Use UP/DOWN arrows to adjust T-Man\'s firing angle.', canvas.width / 2 - 200, 220);
+            ctx.fillText('• T-Man fires automatically. Hold CTRL for rapid fire.', canvas.width / 2 - 200, 240);
+
+            ctx.font = '20px Arial';
+            ctx.fillText('Power-Ups:', canvas.width / 2 - 200, 280);
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#000000'; // Black for bullet points
+            ctx.fillText('• HP (Red): Restores T-Man\'s health.', canvas.width / 2 - 200, 310);
+            ctx.fillText('• STR (Orange): Increases your projectile damage for a short time.', canvas.width / 2 - 200, 330);
+            ctx.fillText('• BIG (Violet): Enlarges T-Man and his shots for a short time.', canvas.width / 2 - 200, 350);
+            ctx.fillText('• SHD (Blue): Activates a protective shield that deflects incoming projectiles.', canvas.width / 2 - 200, 370);
+            
+            ctx.textAlign = 'center'; // Reset for final text
+        }
+
+
+        /**
+         * The main game loop that updates and draws the game.
+         */
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'title') {
+                drawTitleScreen();
+            } else if (gameState === 'main_menu') {
+                drawMainMenu();
+            } else if (gameState === 'game_info') {
+                drawGameInfo();
+            }
+            else if (gameState === 'playing') {
+                moveTaolie();
+                // T-Man now shoots automatically
+                shootTAO();
+                moveEnemies();
+                checkCollisions();
+                drawGame();
+            } else if (gameState === 'death') {
+                drawGame(); // Draw game screen one last time
+                document.getElementById('messageModalTitle').textContent = 'MISSION FAILED!';
+                document.getElementById('messageModalText').textContent = `Your Score: ${score}`;
+                document.getElementById('messageModal').style.display = 'block';
+            } else if (gameState === 'win') {
+                drawGame(); // Draw game screen one last time
+                document.getElementById('messageModalTitle').textContent = 'REBELLION WON!';
+                document.getElementById('messageModalText').textContent = `Final Score: ${score}`;
+                document.getElementById('messageModal').style.display = 'block';
+            } else if (gameState === 'level_transition') {
+                drawGame(); // Draw transition screen
+                levelTransitionTimer -= 16;
+                if (levelTransitionTimer <= 0) {
+                    setupLevel(); // Setup the new level, which will then directly set playing state
+                }
+            }
+        }
+
+        // Start the game loop when the window loads
+        window.onload = function () {
+            gameLoop();
+            setupTouchControls(); // Initialize touch controls on load
+        }
+    </script>
+</body>
+</html>
