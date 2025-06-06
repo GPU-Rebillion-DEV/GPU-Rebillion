@@ -95,68 +95,58 @@
             transform: translateY(-2px);
         }
 
-        /* Touch Controls Styling - Increased size and slightly adjusted opacity */
+        /* Touch Controls Styling - Consistent size and slightly adjusted opacity */
         .touch-control {
-            position: absolute; /* Default for individual controls not in flex container */
+            position: absolute; /* Default, overridden for bottom-center-controls children */
             background-color: rgba(255, 255, 255, 0.25); /* Slightly less transparent */
-            border-radius: 8px; /* Slightly less rounded for smaller size */
+            border-radius: 12px; /* Uniform rounded corners */
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.2em; /* Smaller font for symbols/text */
             font-weight: bold;
             color: #fff; /* White text for controls */
             user-select: none; /* Prevent text selection on touch */
             -webkit-user-select: none; /* For WebKit browsers */
             touch-action: manipulation; /* Prevent default browser gestures like zoom */
             z-index: 50; /* Ensure controls are above canvas but below modals */
-            padding: 3px; /* Reduced padding for smaller touch target */
+            padding: 0; /* No extra padding, button size controls this */
+            /* Uniform size for all interactive buttons */
+            width: 18vw; /* Width relative to viewport width */
+            height: 10vh; /* Height relative to viewport height */
+            font-size: 3vw; /* Font size scales with viewport */
         }
 
-        /* Movement Controls - Reduced dimensions */
         #left-btn {
-            left: 1%; /* Closer to edge */
-            bottom: 1%; /* Closer to edge */
-            width: 12%; /* Smaller */
-            height: 18%; /* Smaller */
+            left: 2%; /* Adjusted from 1% for more space from edge */
+            bottom: 2%; /* Adjusted from 1% */
         }
         #right-btn {
-            right: 1%; /* Closer to edge */
-            bottom: 1%; /* Closer to edge */
-            width: 12%; /* Smaller */
-            height: 18%; /* Smaller */
+            right: 2%; /* Adjusted from 1% */
+            bottom: 2%; /* Adjusted from 1% */
         }
-        /* New container for jump and fire buttons */
+        /* Container for jump and fire buttons */
         .bottom-center-controls {
             position: absolute;
-            bottom: 1%; /* Same as other controls */
+            bottom: 2%; /* Consistent with Left/Right buttons */
             left: 50%;
             transform: translateX(-50%); /* Center the container */
             display: flex;
-            gap: 2%; /* Spacing between buttons */
+            gap: 2vw; /* Spacing scales with viewport */
             justify-content: center; /* Center buttons within container */
             align-items: center;
             width: auto; /* Let content define width */
-            padding: 0; /* No extra padding */
+            padding: 0;
         }
 
-        /* Adjust individual button positions within the container */
+        /* Ensure buttons inside the flex container override individual positioning */
         .bottom-center-controls .touch-control {
-            position: static; /* Remove absolute positioning */
-            transform: none; /* Remove previous centering transform */
+            position: static;
+            transform: none;
+            /* Width/Height/Font size are inherited from .touch-control */
         }
 
-        #jump-btn {
-            width: 10%; /* Keep original width */
-            height: 18%; /* Keep original height */
-            font-size: 1em; /* Adjusted font size */
-        }
-
-        #fire-btn {
-            width: 12%; /* Keep original width */
-            height: 18%; /* Consistent height with movement buttons */
-            background-color: rgba(255, 69, 0, 0.4); /* Orange-red for fire, slightly less transparent */
-            font-size: 1em; /* Adjusted font size */
+        #fire-btn { /* Specific styles for fire button color */
+            background-color: rgba(255, 69, 0, 0.4);
         }
 
         /* Hide touch controls on larger screens (desktop) */
@@ -186,8 +176,6 @@
             <div id="jump-btn" class="touch-control">JUMP</div>
             <div id="fire-btn" class="touch-control">FIRE</div>
         </div>
-
-        <!-- The separate menu-enter-btn is removed as per request -->
 
     </main>
 
@@ -244,7 +232,7 @@
             jumpPower: -12,
             isJumping: false,
             color: '#800080',
-            angle: 0, // New: T-Man's projectile angle (0 = right, -PI/2 = up, PI/2 = down)
+            angle: 0, // T-Man's projectile angle (0 = right, -PI/2 = up, PI/2 = down)
             angleStep: Math.PI / 30, // How much angle changes per key press (6 degrees)
             maxAngle: -Math.PI / 2, // Max angle looking up
             minAngle: Math.PI / 4 // Max angle looking down
@@ -261,7 +249,7 @@
         let platforms = [];
         let activeEnemies = [];
         let enemyQueue = [];
-        const powerUps = [];
+        const powerUps = []; // Array to store power-up objects
 
         // Main Menu variables (Highscore removed)
         const mainMenuOptions = ["Start Game", "Game Info"];
@@ -323,7 +311,7 @@
             };
 
             // Apply touch prevention to all relevant buttons
-            [leftBtn, rightBtn, jumpBtn, fireBtn].forEach(btn => { // Removed menuEnterBtn
+            [leftBtn, rightBtn, jumpBtn, fireBtn].forEach(btn => {
                 if (btn) {
                     btn.addEventListener('touchstart', preventDefaultTouch, { passive: false });
                     btn.addEventListener('touchmove', preventDefaultTouch, { passive: false });
@@ -1155,7 +1143,8 @@
                                     y: enemy.y + enemy.height / 2,
                                     width: 20, height: 20,
                                     type: type,
-                                    dy: -5, gravity: 0.3 // Power-ups float up then fall
+                                    dy: -5, gravity: 0.3, // Power-ups float up then fall
+                                    spawnTime: Date.now() // Record spawn time for expiry
                                 });
                             }
                         }
@@ -1234,7 +1223,7 @@
                     taolie.x < power.x + power.width &&
                     taolie.x + taolie.width * taolieScale > power.x &&
                     taolie.y < power.y + power.height &&
-                    taolie.y + taolie.height * taolieScale > power.y // Corrected line
+                    taolie.y + taolie.height * taolieScale > power.y
                 ) {
                     if (power.type === 'health') {
                         if (taolieHP < 200) {
@@ -1253,13 +1242,6 @@
                         shieldPowerUpTimer = 10000;
                     }
                     powerUps.splice(pIndex, 1); // Remove power-up after collection
-                }
-                // Apply gravity to power-ups
-                power.y += power.dy;
-                power.dy += power.gravity;
-                if (power.y + power.height > canvas.height - 50) { // Stop at ground
-                    power.y = canvas.height - 50 - power.height;
-                    power.dy = 0;
                 }
             });
 
@@ -1285,6 +1267,30 @@
                 }
             }
         }
+
+        /**
+         * Updates and manages the state of power-ups, including their movement and expiry.
+         */
+        function updatePowerUps() {
+            const now = Date.now();
+            for (let i = powerUps.length - 1; i >= 0; i--) {
+                const power = powerUps[i];
+
+                // Apply gravity to power-ups
+                power.y += power.dy;
+                power.dy += power.gravity;
+                if (power.y + power.height > canvas.height - 50) { // Stop at ground
+                    power.y = canvas.height - 50 - power.height;
+                    power.dy = 0;
+                }
+
+                // Check for power-up expiry (5 seconds)
+                if (now - power.spawnTime > 5000) { // 5000 milliseconds = 5 seconds
+                    powerUps.splice(i, 1); // Remove expired power-up
+                }
+            }
+        }
+
 
         /**
          * Draws the main game elements (background, player, enemies, projectiles, UI).
@@ -1656,7 +1662,7 @@
             ctx.textAlign = 'left';
             ctx.fillText('• Use LEFT/RIGHT arrows to move T-Man.', canvas.width / 2 - 200, 180);
             ctx.fillText('• Press SPACE to jump.', canvas.width / 2 - 200, 200);
-            ctx.fillText('• Use keyboard UP/DOWN arrows to adjust T-Man\'s firing angle.', canvas.width / 2 - 200, 220); // Updated text
+            ctx.fillText('• Use keyboard UP/DOWN arrows to adjust T-Man\'s firing angle.', canvas.width / 2 - 200, 220);
             ctx.fillText('• T-Man fires automatically. Hold CTRL for rapid fire.', canvas.width / 2 - 200, 240);
 
             ctx.font = '20px Arial';
@@ -1692,6 +1698,7 @@
                 shootTAO();
                 moveEnemies();
                 checkCollisions();
+                updatePowerUps(); // New: Update power-ups (movement, expiry)
                 drawGame();
             } else if (gameState === 'death') {
                 drawGame(); // Draw game screen one last time
